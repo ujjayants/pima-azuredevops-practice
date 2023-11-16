@@ -1,0 +1,132 @@
+trigger:
+# - main
+  - none
+
+pool:
+  # vmImage: ubuntu-latest # Microsoft Hosted Agent
+  name: Default  # self-hosted agent
+
+variables:
+  group: us-variable-pima
+
+stages:
+- stage: ContinuousIntegration
+  jobs:
+  - job: installDependencies
+    steps:
+    - task: UsePythonVersion@0
+      displayName: 'Use Python 3.8'
+      inputs:
+        versionSpec: 3.8
+
+
+    - task: Bash@3
+      displayName: installPythonPackages
+      inputs:
+        targetType: filePath
+        filePath: ./dependencies/install_requirements.sh
+        workingDirectory: dependencies
+
+
+  - job: addCLIv2_MLExtension
+    dependsOn: installDependencies
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Add Azure CLI ML Extension'
+      inputs:
+        azureSubscription: $(serviceConnectionName)
+        scriptType: 'ps'
+        scriptLocation: 'inlineScript'
+        inlineScript: 'az extension add -n ml'
+        useGlobalConfig: true
+
+
+  - job: Train_Register_Model
+    dependsOn: addCLIv2_MLExtension
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Train and register model'
+      inputs:
+        azureSubscription: $(serviceConnectionName)
+        scriptType: 'ps'    # SHOULD THIS BE IN QUOTES?
+        scriptLocation: 'inlineScript'
+        inlineScript: 'az ml job create --file train.yml --stream --resource-group $(resourceGroupName) --workspace-name $(workspaceName) --set inputs.modelName=$(modelName)'
+        useGlobalConfig: true
+        workingDirectory: src
+
+  - job: publishArtifacts_forDeployment
+    dependsOn: Train_Register_Model
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Get Latest Version'
+      inputs:
+        azureSubscription: $(serviceConnectionName)
+        scriptType: 'ps'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          $version=$(az ml model show --name $(modelName) --label latest --resource-group $(resourceGroupName) --workspace-name $(workspaceName) --query version --output tsv)
+          Write-Host "##vso[task.setvariable variable=version]$version"
+        useGlobalConfig: true
+
+    - task: addCLIv2_MLExtension
+      displayName: 'Download Model Artifacts'
+      inputs:
+        azureSubscription: $(serviceConnectionName)
+        scriptType: 'ps'
+        scriptLocation: 'inlineScript'
+        inlineScript: |   # what is download-path
+          az ml model download --name $(modelName) --version $(version) --download-path . --resource-group $(resourceGroupName) --workspace-name $(workspaceName)
+        useGlobalConfig: true
+
+    - task: CopyFiles@2
+      displayName: 'Copy Files to: $(Build.ArtifactStagingDirectory)'
+      inputs:
+        SourceFolder: '$(Build.SourcesDirectory)'
+        Contents: |
+          **/$(modelName)/*
+          **/dependencies/*
+          **/deploy/*
+        TargetFolder: '$(Build.ArtifactStagingDirectory)'
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Pipeline Artifact'
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)'
+        artifact: TrainingModelArtifacts
+  
+- stage: ContinuousDeployment
+  dependsOn: ContinuousIntegration
+  jobs:
+    - job: DeployModel
+      steps:
+        - download: current
+          artifact: TrainingModelArtifacts  
+      - task: AzureCLI@2
+        displayName: CreateEndpoint
+        inputs:
+            azureSubscription: $(serviceConnectionName)
+            scriptType: ps
+            scriptLocation: inlineScript
+            inlineScript: |
+              $ENDPOINT_EXISTS = (az ml online-endpoint list -o tsv --query "[?name=='$(endpointName)'][name]" --resource-group $(resourceGroupName) --workspace-name $(workspaceName) | Measure-Object).Count
+              Write-Host "$ENDPOINT_EXISTS"
+
+              if ($ENDPOINT_EXISTS -ne 1) {
+                  Write-Host "Endpoint Doesn't Exists, Creating $(endpointName)"
+                  az ml online-endpoint create --file endpoint.yml --resource-group $(resourceGroupName) --workspace-name $(workspaceName) --set name=$(endpointName)
+              } else {
+                  Write-Host "Endpoint exists"
+              }
+            useGlobalConfig: true
+            workingDirectory: $(Pipeline.Workspace)/TrainingModelArtifacts/deploy
+ 
+      - task: AzureCLI@2
+        displayName: CreateDeployment
+        inputs:
+            azureSubscription: $(serviceConnectionName)
+            scriptType: ps
+            scriptLocation: inlineScript
+            inlineScript: |
+              az ml online-deployment create --file  deploy.yml --resource-group $(resourceGroupName) --workspace-name $(workspaceName) --set instance_type=Standard_DS2_v2 --set endpoint_name=$(endpointName)
+            useGlobalConfig: true
+            workingDirectory: $(Pipeline.Workspace)/TrainingModelArtifacts/deploy
