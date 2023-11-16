@@ -1,0 +1,11 @@
+$schema: https://azuremlschemas.azureedge.net/latest/managedOnlineDeployment.schema.json
+name: blue
+endpoint_name: pima-ci-endpoint-sdk-v2
+model:
+  path: ../pimaModelCI/pimaModelCI/
+code_configuration:
+  code: .
+  scoring_script: onlineScore.py
+environment: azureml:ENV-SDKv2@latest
+instance_type: Standard_DS3_v2
+instance_count: 1

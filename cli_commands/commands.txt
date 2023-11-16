@@ -1,0 +1,43 @@
+- Adding Azure CLI Machine Learning Extenstion
+  command: az extension add -n ml
+
+- creating workspace
+  az ml workspace create --file workspace.yml --resource-group $(resourceGroupName)
+
+- creating Compute Cluster
+  az ml compute create --file compute.yml --resource-group $(resourceGroupName) --workspace-name $(workspaceName)
+
+- Training & Registering Model
+  command: az ml job create --file train.yml --stream --resource-group $(resourceGroupName) --workspace-name $(workspaceName) --set inputs.modelName=$(modelName)
+  --stream: used to stream the logs to the console
+  --set: used to update property in yaml file
+
+- Getting Latest Register Model Version
+  script type: PowerShell
+  command: $version=$(az ml model show --name $(modelName) --label latest --resource-group $(resourceGroupName) --workspace-name $(workspaceName) --query version --output tsv)
+           Write-Host "##vso[task.setvariable variable=version]$version"
+
+  we are extracting the latest version and storing it in a variable and then setting it so that we can use in subsequent tasks
+  --query: used to extract the specific information from output, here we are extracting "version" from output
+  --output: used to format the output, here we are formatting the output in tsv(table separated values)
+  Write-Host "##vso[task.setvariable variable=version]$version": used to set the variable at runtime
+
+- Downloading Model & it's Artifacts to the local Directory to make use of it in deployment
+  command: az ml model download --name $(modelName) --version $(version) --download-path . --resource-group $(resourceGroupName) --workspace-name $(workspaceName)
+
+  --download_path: path to local directory, here we are using "." meaning saving to current directory
+
+- copying files from Source Directory:$(Build.SourcesDirectory) to Artifacts Directory: $(Build.ArtifactStagingDirectory)
+  
+  **/$(modelName)/*
+  **/dependencies/*
+  **/deploy/*
+
+- Publish Artifacts
+  publish artifacts from ArtifactStagingDirectory to Azure Pipelines
+
+- Create Endpoint
+  command: az ml online-endpoint create --file endpoint.yml --resource-group $(resourceGroupName) --workspace-name $(workspaceName)
+
+- Create deployment
+  command: az ml online-deployment create --file  deploy.yml --resource-group $(resourceGroupName) --workspace-name $(workspaceName) --set instance_type=Standard_DS2_v2

@@ -1,0 +1,17 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandJob.schema.json
+
+environment: azureml:ENV-SDKv2@latest
+compute: azureml:ML-Pipeline-Cluster
+experiment_name: Pima-CI-Experiments-Training
+inputs:
+  input_data:
+    mode: ro_mount
+    path: azureml:pima-sdk-v2@latest
+    type: uri_file
+  modelName: pimaModelCI
+code: .
+command: >-
+  python train.py --dataset ${{inputs.input_data}} --model_name ${{inputs.modelName}}
+description: Train a scikit-learn RFC on Pima diabetes Data
+
+

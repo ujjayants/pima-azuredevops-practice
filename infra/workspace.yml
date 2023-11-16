@@ -1,0 +1,6 @@
+$schema: https://azuremlschemas.azureedge.net/latest/workspace.schema.json
+name: ml-workspace
+location: centralindia
+display_name: ML-Workspace
+description: YAML Configuration to create workspace
+hbi_workspace: false

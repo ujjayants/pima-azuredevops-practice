@@ -1,0 +1,20 @@
+name: model-env
+channels:
+  - anaconda
+  - conda-forge
+dependencies:
+  - python=3.8
+  - numpy=1.21.2
+  - pip=21.2.4
+  - scikit-learn=1.1.1
+  - scipy=1.7.1
+  - pandas>=1.1,<1.2
+  - pip:
+    - azureml-inference-server-http
+    - mlflow==2.4.0
+    - azureml-mlflow==1.49.0
+    - azure-ai-ml==1.8.0
+    - azure-identity==1.7.0
+    - azureml-core==1.49.0
+    - cloudpickle==2.2.1
+    - psutil==5.9.0
