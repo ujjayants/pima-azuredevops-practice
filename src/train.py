@@ -37,26 +37,30 @@ if __name__ =='__main__':
     accuracy = model_metric(model, X_val_scaled , y_val)
     print('Accuracy:', accuracy)
 
+    dir_path = model_name
     # Save model and other artifacts
-    os.makedirs(model_name, exist_ok=True)
+    os.makedirs(dir_path, exist_ok=True)
 
-    scaler_path = f'{model_name}/scaler.pkl'
-    categorical_path = f'{model_name}/unique_values_train.pkl'
-    column_mapping_path = f'{model_name}/column_mapping.pkl'
+    scaler_path = f'{dir_path}/scaler.pkl'
+    categorical_path = f'{dir_path}/unique_values_train.pkl'
+    column_mapping_path = f'{dir_path}/column_mapping.pkl'
 
     # dump    
     joblib.dump(value= scaler, filename=scaler_path)
-    joblib.dump(value=unique_values_train, filename= categorical_path)
+    joblib.dump(value= unique_values_train, filename= categorical_path)
     joblib.dump(value= column_mapping, filename= column_mapping_path)
 
-
+    mlflow.log_artifacts(  dir_path, dir_path )
 
     # Registering Model
     print("Registering the model via MLFlow")
     mlflow.sklearn.log_model( sk_model=model,
                               registered_model_name=model_name,
-                              artifact_path=model_name,
+                              artifact_path= dir_path,
                             )
+
+    # mlflow.log_artifacts(  dir_path, dir_path )
+
 
     # Stop Logging
     mlflow.end_run()

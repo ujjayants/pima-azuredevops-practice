@@ -4,10 +4,10 @@ trigger:
 
 pool:
   # vmImage: ubuntu-latest # Microsoft Hosted Agent
-  name: Default  # self-hosted agent
+  name: Default   # SELF HOSTED AGENT
 
 variables:
-  group: us-variable-pima
+  - group: us-variable-pima
 
 stages:
 - stage: ContinuousIntegration
@@ -19,7 +19,6 @@ stages:
       inputs:
         versionSpec: 3.8
 
-
     - task: Bash@3
       displayName: installPythonPackages
       inputs:
@@ -27,10 +26,9 @@ stages:
         filePath: ./dependencies/install_requirements.sh
         workingDirectory: dependencies
 
-
   - job: addCLIv2_MLExtension
     dependsOn: installDependencies
-    steps:
+    steps: 
     - task: AzureCLI@2
       displayName: 'Add Azure CLI ML Extension'
       inputs:
@@ -40,23 +38,22 @@ stages:
         inlineScript: 'az extension add -n ml'
         useGlobalConfig: true
 
-
-  - job: Train_Register_Model
+  - job: Train_andRegister_Model
     dependsOn: addCLIv2_MLExtension
     steps:
     - task: AzureCLI@2
-      displayName: 'Train and register model'
+      displayName: 'Train & Register Model'
       inputs:
         azureSubscription: $(serviceConnectionName)
-        scriptType: 'ps'    # SHOULD THIS BE IN QUOTES?
-        scriptLocation: 'inlineScript'
+        scriptType: ps
+        scriptLocation: inlineScript
         inlineScript: 'az ml job create --file train.yml --stream --resource-group $(resourceGroupName) --workspace-name $(workspaceName) --set inputs.modelName=$(modelName)'
         useGlobalConfig: true
         workingDirectory: src
 
   - job: publishArtifacts_forDeployment
-    dependsOn: Train_Register_Model
-    steps:
+    dependsOn: Train_andRegister_Model
+    steps: 
     - task: AzureCLI@2
       displayName: 'Get Latest Version'
       inputs:
@@ -67,13 +64,13 @@ stages:
           $version=$(az ml model show --name $(modelName) --label latest --resource-group $(resourceGroupName) --workspace-name $(workspaceName) --query version --output tsv)
           Write-Host "##vso[task.setvariable variable=version]$version"
         useGlobalConfig: true
-
-    - task: addCLIv2_MLExtension
+      
+    - task: AzureCLI@2
       displayName: 'Download Model Artifacts'
       inputs:
         azureSubscription: $(serviceConnectionName)
-        scriptType: 'ps'
-        scriptLocation: 'inlineScript'
+        scriptType: ps
+        scriptLocation: inlineScript
         inlineScript: |   # what is download-path
           az ml model download --name $(modelName) --version $(version) --download-path . --resource-group $(resourceGroupName) --workspace-name $(workspaceName)
         useGlobalConfig: true
@@ -101,9 +98,9 @@ stages:
       steps:
         - download: current
           artifact: TrainingModelArtifacts  
-      - task: AzureCLI@2
-        displayName: CreateEndpoint
-        inputs:
+        - task: AzureCLI@2
+          displayName: CreateEndpoint
+          inputs:
             azureSubscription: $(serviceConnectionName)
             scriptType: ps
             scriptLocation: inlineScript
@@ -119,14 +116,14 @@ stages:
               }
             useGlobalConfig: true
             workingDirectory: $(Pipeline.Workspace)/TrainingModelArtifacts/deploy
- 
-      - task: AzureCLI@2
-        displayName: CreateDeployment
-        inputs:
+
+        - task: AzureCLI@2
+          displayName: CreateDeployment
+          inputs:
             azureSubscription: $(serviceConnectionName)
             scriptType: ps
             scriptLocation: inlineScript
             inlineScript: |
-              az ml online-deployment create --file  deploy.yml --resource-group $(resourceGroupName) --workspace-name $(workspaceName) --set instance_type=Standard_DS2_v2 --set endpoint_name=$(endpointName)
+              az ml online-deployment create --file  deploy.yml --resource-group $(resourceGroupName) --workspace-name $(workspaceName) --set instance_type=Standard_DS2_v2 --set endpoint_name=$(endpointName) --set model.path=../$(modelName)/$(modelName)
             useGlobalConfig: true
             workingDirectory: $(Pipeline.Workspace)/TrainingModelArtifacts/deploy
