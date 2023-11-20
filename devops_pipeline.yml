@@ -124,6 +124,6 @@ stages:
             scriptType: ps
             scriptLocation: inlineScript
             inlineScript: |
-              az ml online-deployment create --file  deploy.yml --resource-group $(resourceGroupName) --workspace-name $(workspaceName) --set instance_type=Standard_DS2_v2 --set endpoint_name=$(endpointName) --set model.path=../$(modelName)/$(modelName)
+              az ml online-deployment create --file  deploy.yml --resource-group $(resourceGroupName) --workspace-name $(workspaceName) --set instance_type=Standard_DS2_v2 --set endpoint_name=$(endpointName) --set model.path=../$(modelName)/$(modelName) --all-traffic
             useGlobalConfig: true
             workingDirectory: $(Pipeline.Workspace)/TrainingModelArtifacts/deploy
